@@ -4,7 +4,7 @@ import io
 import zipfile
 from pathlib import Path
 
-st.set_page_config(page_title=“LocalConvert”, page_icon="🖼️")
+st.set_page_config(page_title="LocalConvert", page_icon="🖼️")
 
 st.title("🖼️ Image Format Converter")
 st.write("Upload images in any format. They'll be resized to max 1000px and converted to JPG (if opaque) or PNG (if transparent).")
