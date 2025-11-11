@@ -3,8 +3,9 @@ from PIL import Image
 import io
 import zipfile
 from pathlib import Path
+import sys
 
-st.set_page_config(page_title="Image Converter", page_icon="🖼️")
+st.set_page_config(page_title="Image Processor", page_icon="🖼️")
 
 # Password protection
 def check_password():
@@ -39,8 +40,27 @@ def check_password():
 if not check_password():
     st.stop()  # Don't continue if password check fails
 
-st.title("🖼️ Universal Image Format Converter")
-st.write("Upload images in virtually any format. They'll be resized to max 1000px and converted to JPG (if opaque) or PNG (if transparent).")
+# Check for Real-ESRGAN availability
+try:
+    import torch
+    import numpy as np
+    from basicsr.archs.rrdbnet_arch import RRDBNet
+    from realesrgan import RealESRGANer
+    REALESRGAN_AVAILABLE = True
+    DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+except ImportError:
+    REALESRGAN_AVAILABLE = False
+    DEVICE = 'cpu'
+
+st.title("🖼️ AI Image Processor")
+st.write("Upload images and choose to convert formats or upscale using AI.")
+
+# Show system info
+if REALESRGAN_AVAILABLE:
+    device_emoji = "🚀" if DEVICE == 'cuda' else "🐌"
+    st.info(f"{device_emoji} AI Upscaling: {'GPU acceleration enabled' if DEVICE == 'cuda' else 'CPU mode (slower)'}")
+else:
+    st.warning("⚠️ AI Upscaling unavailable. Install with: `pip install realesrgan basicsr`")
 
 # Comprehensive list of supported formats
 SUPPORTED_FORMATS = [
@@ -98,6 +118,32 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True,
     help="Supports 70+ image formats including RAW, PSD, EPS, HEIC, and more!"
 )
+
+# Initialize Real-ESRGAN model (cached)
+@st.cache_resource
+def load_realesrgan_model(scale=4):
+    """Load Real-ESRGAN model (cached)"""
+    if not REALESRGAN_AVAILABLE:
+        return None
+    
+    try:
+        # Use RealESRGAN_x4plus model
+        model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=scale)
+        
+        upsampler = RealESRGANer(
+            scale=scale,
+            model_path='https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth',
+            model=model,
+            tile=0,
+            tile_pad=10,
+            pre_pad=0,
+            half=True if DEVICE == 'cuda' else False,
+            device=DEVICE
+        )
+        return upsampler
+    except Exception as e:
+        st.error(f"Error loading model: {e}")
+        return None
 
 def has_transparency(img):
     """Check if image has transparency"""
@@ -209,71 +255,160 @@ def convert_image(uploaded_file):
     except Exception as e:
         return {'error': str(e), 'filename': uploaded_file.name}
 
+def upscale_image_realesrgan(uploaded_file, upsampler, scale=4):
+    """Upscale image using Real-ESRGAN"""
+    try:
+        # Open image
+        img = Image.open(uploaded_file)
+        
+        # Convert to RGB if necessary
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        # Convert to numpy array
+        img_np = np.array(img)
+        
+        # Upscale using Real-ESRGAN
+        output_np, _ = upsampler.enhance(img_np, outscale=scale)
+        
+        # Convert back to PIL Image
+        output_img = Image.fromarray(output_np)
+        
+        # Save to bytes
+        output = io.BytesIO()
+        output_img.save(output, format='PNG', optimize=True)
+        output.seek(0)
+        
+        # Generate filename
+        original_name = Path(uploaded_file.name).stem
+        new_filename = f"{original_name}_upscaled_{scale}x.png"
+        
+        return {
+            'data': output.getvalue(),
+            'filename': new_filename,
+            'format': 'PNG',
+            'size': output_img.size,
+            'original_format': 'upscaled'
+        }
+    except Exception as e:
+        return {'error': str(e), 'filename': uploaded_file.name}
+
 if uploaded_files:
-    st.write(f"Processing {len(uploaded_files)} file(s)...")
+    st.write(f"### {len(uploaded_files)} file(s) uploaded")
     
-    converted_images = []
-    errors = []
+    # Show operation selection
+    st.write("### Choose an operation:")
     
-    # Process all images
-    progress_bar = st.progress(0)
-    for idx, uploaded_file in enumerate(uploaded_files):
-        result = convert_image(uploaded_file)
-        if 'error' in result:
-            errors.append(f"❌ {result['filename']}: {result['error']}")
-        else:
-            converted_images.append(result)
-        progress_bar.progress((idx + 1) / len(uploaded_files))
-    
-    # Display results
-    st.success(f"✅ Successfully converted {len(converted_images)} image(s)")
-    
-    if errors:
-        st.error("Errors occurred:")
-        for error in errors:
-            st.write(error)
-    
-    # Show converted images
-    if converted_images:
-        st.write("### Converted Images:")
-        for img_data in converted_images:
-            col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
-            with col1:
-                st.write(f"**{img_data['filename']}**")
+    # Disable upscaling if not available
+    if not REALESRGAN_AVAILABLE:
+        operation = "Convert & Resize"
+        st.info("📋 Only conversion available. Install Real-ESRGAN for AI upscaling.")
+    else:
+        col1, col2 = st.columns(2)
+        with col1:
+            operation = st.radio(
+                "What would you like to do?",
+                ["Convert & Resize", "AI Upscale"],
+                help="Convert: Optimize format and resize to 1000px max | Upscale: Enhance quality using Real-ESRGAN (local processing)"
+            )
+        
+        if operation == "AI Upscale":
             with col2:
-                st.write(f"{img_data['original_format']} → {img_data['format']}")
-            with col3:
-                st.write(f"{img_data['size'][0]}×{img_data['size'][1]}px")
-            with col4:
-                st.write(f"{len(img_data['data']) / 1024:.1f} KB")
-        
-        # Create ZIP file
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            for img_data in converted_images:
-                zip_file.writestr(img_data['filename'], img_data['data'])
-        
-        zip_buffer.seek(0)
-        
-        # Download button
-        st.download_button(
-            label="📥 Download All as ZIP",
-            data=zip_buffer.getvalue(),
-            file_name="converted_images.zip",
-            mime="application/zip",
-            use_container_width=True
-        )
-        
-        # Individual download buttons
-        with st.expander("Download Individual Files"):
-            for img_data in converted_images:
-                st.download_button(
-                    label=f"Download {img_data['filename']}",
-                    data=img_data['data'],
-                    file_name=img_data['filename'],
-                    mime=f"image/{img_data['format'].lower()}",
-                    key=img_data['filename']
+                scale = st.selectbox(
+                    "Upscale factor",
+                    [2, 4],
+                    index=1,
+                    help="Higher values = larger output files"
                 )
+    
+    # Process button
+    if st.button("🚀 Process Images", type="primary", use_container_width=True):
+        processed_images = []
+        errors = []
+        
+        # Load model if upscaling
+        upsampler = None
+        if operation == "AI Upscale" and REALESRGAN_AVAILABLE:
+            with st.spinner("Loading AI model..."):
+                upsampler = load_realesrgan_model(scale=scale if operation == "AI Upscale" else 4)
+                if upsampler is None:
+                    st.error("Failed to load Real-ESRGAN model. Please check installation.")
+                    st.stop()
+        
+        # Process all images
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        for idx, uploaded_file in enumerate(uploaded_files):
+            status_text.text(f"Processing {uploaded_file.name}...")
+            
+            if operation == "Convert & Resize":
+                result = convert_image(uploaded_file)
+            else:  # AI Upscale
+                result = upscale_image_realesrgan(uploaded_file, upsampler, scale)
+            
+            if 'error' in result:
+                errors.append(f"❌ {result['filename']}: {result['error']}")
+            else:
+                processed_images.append(result)
+            
+            progress_bar.progress((idx + 1) / len(uploaded_files))
+        
+        status_text.empty()
+        
+        # Display results
+        if processed_images:
+            st.success(f"✅ Successfully processed {len(processed_images)} image(s)")
+        
+        if errors:
+            with st.expander("⚠️ Errors occurred", expanded=True):
+                for error in errors:
+                    st.write(error)
+        
+        # Show processed images
+        if processed_images:
+            st.write("### Processed Images:")
+            for img_data in processed_images:
+                col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+                with col1:
+                    st.write(f"**{img_data['filename']}**")
+                with col2:
+                    if operation == "Convert & Resize":
+                        st.write(f"{img_data['original_format']} → {img_data['format']}")
+                    else:
+                        st.write(f"Upscaled {scale}x")
+                with col3:
+                    st.write(f"{img_data['size'][0]}×{img_data['size'][1]}px")
+                with col4:
+                    st.write(f"{len(img_data['data']) / 1024:.1f} KB")
+            
+            # Create ZIP file
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for img_data in processed_images:
+                    zip_file.writestr(img_data['filename'], img_data['data'])
+            
+            zip_buffer.seek(0)
+            
+            # Download button
+            st.download_button(
+                label="📥 Download All as ZIP",
+                data=zip_buffer.getvalue(),
+                file_name=f"processed_images_{operation.replace(' ', '_').lower()}.zip",
+                mime="application/zip",
+                use_container_width=True
+            )
+            
+            # Individual download buttons
+            with st.expander("Download Individual Files"):
+                for img_data in processed_images:
+                    st.download_button(
+                        label=f"Download {img_data['filename']}",
+                        data=img_data['data'],
+                        file_name=img_data['filename'],
+                        mime=f"image/{img_data['format'].lower()}",
+                        key=img_data['filename']
+                    )
 
 else:
     st.info("👆 Upload some images to get started!")
@@ -300,4 +435,4 @@ else:
 
 # Footer
 st.markdown("---")
-st.caption("Universal Image Converter - Supports 70+ formats including RAW, PSD, HEIC, AVIF, and more!")
+st.caption("AI Image Processor - Convert & Upscale | Powered by Real-ESRGAN | Supports 70+ formats")
