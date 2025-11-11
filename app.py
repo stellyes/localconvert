@@ -6,6 +6,39 @@ from pathlib import Path
 
 st.set_page_config(page_title="Image Converter", page_icon="🖼️")
 
+# Password protection
+def check_password():
+    """Returns `True` if the user has entered the correct password."""
+    
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        if st.session_state["password"] == st.secrets.get("app_password", "password"):
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # Don't store password
+        else:
+            st.session_state["password_correct"] = False
+
+    # First run, show input for password
+    if "password_correct" not in st.session_state:
+        st.text_input(
+            "Password", type="password", on_change=password_entered, key="password"
+        )
+        st.write("*Please enter the password to access the app.*")
+        return False
+    # Password not correct, show input + error
+    elif not st.session_state["password_correct"]:
+        st.text_input(
+            "Password", type="password", on_change=password_entered, key="password"
+        )
+        st.error("😕 Password incorrect")
+        return False
+    # Password correct
+    else:
+        return True
+
+if not check_password():
+    st.stop()  # Don't continue if password check fails
+
 st.title("🖼️ Universal Image Format Converter")
 st.write("Upload images in virtually any format. They'll be resized to max 1000px and converted to JPG (if opaque) or PNG (if transparent).")
 
