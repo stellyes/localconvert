@@ -177,7 +177,9 @@ streamlit run app.py
 
 ### Deploy to Streamlit Cloud
 
-**Important**: Streamlit Cloud does not support GPU acceleration, so AI upscaling will run in CPU mode and be significantly slower. For production use with upscaling, consider deploying to a platform with GPU support.
+**Note**: Streamlit Cloud does not support Real-ESRGAN installation due to dependency conflicts with Python 3.13+. The app will automatically fall back to high-quality Lanczos upscaling, which still works well but doesn't use AI enhancement.
+
+**For AI upscaling, deploy to a platform with GPU support (see below).**
 
 1. Push your code to a GitHub repository with the following structure:
 ```
@@ -189,16 +191,14 @@ your-repo/
 
 **Important**: Do NOT include `.streamlit/secrets.toml` in your repository!
 
-2. Create a `requirements.txt` file with the following:
+2. Create a `requirements.txt` file with the following (simplified for Streamlit Cloud):
 ```
-streamlit
-pillow
-torch
-torchvision
-basicsr
-facexlib
-gfpgan
-realesrgan
+streamlit>=1.28.0
+pillow>=10.0.0
+numpy>=1.24.0
+opencv-python-headless>=4.8.0
+torch>=2.0.0
+torchvision>=0.15.0
 ```
 
 3. Visit [share.streamlit.io](https://share.streamlit.io)
@@ -220,7 +220,7 @@ realesrgan
 
 Your app will be live at `https://your-app-name.streamlit.app` within minutes!
 
-**Performance Note**: AI upscaling on Streamlit Cloud will be slow due to CPU-only processing. Consider alternative deployment options for better performance.
+**On Streamlit Cloud**: The app will use high-quality Lanczos resampling for upscaling instead of Real-ESRGAN. This is still effective for basic upscaling needs.
 
 ### Deploy with GPU Support
 
@@ -367,9 +367,11 @@ Real-ESRGAN is a state-of-the-art image super-resolution model that uses Generat
 ```
 streamlit>=1.28.0 - Web application framework
 pillow>=10.0.0 - Image processing library
+numpy>=1.24.0 - Numerical computing
+opencv-python-headless>=4.8.0 - Computer vision library
 ```
 
-### AI Upscaling Dependencies
+### AI Upscaling Dependencies (Optional - for local use with GPU)
 ```
 torch>=2.0.0 - Deep learning framework
 torchvision>=0.15.0 - Computer vision utilities
@@ -377,9 +379,9 @@ basicsr>=1.4.2 - Basic image restoration toolkit
 facexlib>=0.3.0 - Face detection and enhancement
 gfpgan>=1.3.8 - Face restoration model
 realesrgan>=0.3.0 - Real-ESRGAN implementation
-numpy>=1.24.0 - Numerical computing
-opencv-python>=4.8.0 - Computer vision library
 ```
+
+**Note**: Real-ESRGAN dependencies may not install on Streamlit Cloud due to Python 3.13 compatibility issues. The app includes a fallback to high-quality Lanczos upscaling.
 
 ### Optional Dependencies
 ```
