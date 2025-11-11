@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 import sys
 
-st.set_page_config(page_title="Image Processor", page_icon="🖼️")
+st.set_page_config(page_title="LocalConvert", page_icon="🖼️")
 
 # Password protection
 def check_password():
@@ -49,6 +49,12 @@ try:
     REALESRGAN_AVAILABLE = True
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 except ImportError:
+    try:
+        import torch
+        import numpy as np
+        TORCH_AVAILABLE = True
+    except ImportError:
+        TORCH_AVAILABLE = False
     REALESRGAN_AVAILABLE = False
     DEVICE = 'cpu'
 
@@ -58,9 +64,9 @@ st.write("Upload images and choose to convert formats or upscale using AI.")
 # Show system info
 if REALESRGAN_AVAILABLE:
     device_emoji = "🚀" if DEVICE == 'cuda' else "🐌"
-    st.info(f"{device_emoji} AI Upscaling: {'GPU acceleration enabled' if DEVICE == 'cuda' else 'CPU mode (slower)'}")
+    st.info(f"{device_emoji} AI Upscaling: Real-ESRGAN {'GPU acceleration' if DEVICE == 'cuda' else 'CPU mode'}")
 else:
-    st.warning("⚠️ AI Upscaling unavailable. Install with: `pip install realesrgan basicsr`")
+    st.warning("⚠️ Real-ESRGAN not available. Using basic Lanczos upscaling instead. For AI upscaling, install locally with: `pip install basicsr realesrgan`")
 
 # Comprehensive list of supported formats
 SUPPORTED_FORMATS = [
@@ -255,6 +261,42 @@ def convert_image(uploaded_file):
     except Exception as e:
         return {'error': str(e), 'filename': uploaded_file.name}
 
+def upscale_image_basic(uploaded_file, scale=2):
+    """Basic upscaling using Lanczos resampling (fallback when Real-ESRGAN unavailable)"""
+    try:
+        # Open image
+        img = Image.open(uploaded_file)
+        
+        # Convert to RGB if necessary
+        if img.mode not in ('RGB', 'RGBA'):
+            img = img.convert('RGB')
+        
+        # Calculate new size
+        new_width = img.width * scale
+        new_height = img.height * scale
+        
+        # Upscale using high-quality Lanczos resampling
+        output_img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        # Save to bytes
+        output = io.BytesIO()
+        output_img.save(output, format='PNG', optimize=True)
+        output.seek(0)
+        
+        # Generate filename
+        original_name = Path(uploaded_file.name).stem
+        new_filename = f"{original_name}_upscaled_{scale}x.png"
+        
+        return {
+            'data': output.getvalue(),
+            'filename': new_filename,
+            'format': 'PNG',
+            'size': output_img.size,
+            'original_format': 'upscaled_basic'
+        }
+    except Exception as e:
+        return {'error': str(e), 'filename': uploaded_file.name}
+
 def upscale_image_realesrgan(uploaded_file, upsampler, scale=4):
     """Upscale image using Real-ESRGAN"""
     try:
@@ -299,27 +341,23 @@ if uploaded_files:
     # Show operation selection
     st.write("### Choose an operation:")
     
-    # Disable upscaling if not available
-    if not REALESRGAN_AVAILABLE:
-        operation = "Convert & Resize"
-        st.info("📋 Only conversion available. Install Real-ESRGAN for AI upscaling.")
-    else:
-        col1, col2 = st.columns(2)
-        with col1:
-            operation = st.radio(
-                "What would you like to do?",
-                ["Convert & Resize", "AI Upscale"],
-                help="Convert: Optimize format and resize to 1000px max | Upscale: Enhance quality using Real-ESRGAN (local processing)"
+    col1, col2 = st.columns(2)
+    with col1:
+        upscale_label = "AI Upscale (Real-ESRGAN)" if REALESRGAN_AVAILABLE else "Upscale (Lanczos)"
+        operation = st.radio(
+            "What would you like to do?",
+            ["Convert & Resize", upscale_label],
+            help="Convert: Optimize format and resize to 1000px max | Upscale: Enhance image size"
+        )
+    
+    if "Upscale" in operation:
+        with col2:
+            scale = st.selectbox(
+                "Upscale factor",
+                [2, 4],
+                index=1 if REALESRGAN_AVAILABLE else 0,
+                help="Higher values = larger output files"
             )
-        
-        if operation == "AI Upscale":
-            with col2:
-                scale = st.selectbox(
-                    "Upscale factor",
-                    [2, 4],
-                    index=1,
-                    help="Higher values = larger output files"
-                )
     
     # Process button
     if st.button("🚀 Process Images", type="primary", use_container_width=True):
@@ -328,12 +366,11 @@ if uploaded_files:
         
         # Load model if upscaling
         upsampler = None
-        if operation == "AI Upscale" and REALESRGAN_AVAILABLE:
+        if "Upscale" in operation and REALESRGAN_AVAILABLE:
             with st.spinner("Loading AI model..."):
-                upsampler = load_realesrgan_model(scale=scale if operation == "AI Upscale" else 4)
+                upsampler = load_realesrgan_model(scale=scale)
                 if upsampler is None:
-                    st.error("Failed to load Real-ESRGAN model. Please check installation.")
-                    st.stop()
+                    st.error("Failed to load Real-ESRGAN model. Falling back to basic upscaling.")
         
         # Process all images
         progress_bar = st.progress(0)
@@ -344,8 +381,11 @@ if uploaded_files:
             
             if operation == "Convert & Resize":
                 result = convert_image(uploaded_file)
-            else:  # AI Upscale
-                result = upscale_image_realesrgan(uploaded_file, upsampler, scale)
+            else:  # Upscale
+                if REALESRGAN_AVAILABLE and upsampler:
+                    result = upscale_image_realesrgan(uploaded_file, upsampler, scale)
+                else:
+                    result = upscale_image_basic(uploaded_file, scale)
             
             if 'error' in result:
                 errors.append(f"❌ {result['filename']}: {result['error']}")
@@ -376,7 +416,8 @@ if uploaded_files:
                     if operation == "Convert & Resize":
                         st.write(f"{img_data['original_format']} → {img_data['format']}")
                     else:
-                        st.write(f"Upscaled {scale}x")
+                        method = "Real-ESRGAN" if img_data['original_format'] == 'upscaled' else "Lanczos"
+                        st.write(f"{method} {scale}x")
                 with col3:
                     st.write(f"{img_data['size'][0]}×{img_data['size'][1]}px")
                 with col4:
@@ -435,4 +476,7 @@ else:
 
 # Footer
 st.markdown("---")
-st.caption("AI Image Processor - Convert & Upscale | Powered by Real-ESRGAN | Supports 70+ formats")
+if REALESRGAN_AVAILABLE:
+    st.caption("AI Image Processor - Convert & Upscale | Powered by Real-ESRGAN | Supports 70+ formats")
+else:
+    st.caption("Image Processor - Convert & Upscale | Basic Lanczos Upscaling | Supports 70+ formats")
