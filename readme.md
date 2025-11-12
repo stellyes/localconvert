@@ -1,6 +1,6 @@
 # 🖼️ AI Image Processor
 
-A powerful, versatile web application built with Streamlit that offers two key features: format conversion from 70+ formats and AI-powered image upscaling using Real-ESRGAN. The app intelligently handles transparency, resizing, and uses local AI processing for high-quality upscaling without API limits.
+A powerful, versatile web application built with Streamlit that offers format conversion from 70+ formats and AI-powered image upscaling using Cloudinary's Generative AI. The app intelligently handles transparency, resizing, and uses cloud-based AI processing for high-quality upscaling without local GPU requirements.
 
 ## Features
 
@@ -13,12 +13,12 @@ A powerful, versatile web application built with Streamlit that offers two key f
 - Batch processing with progress tracking
 
 **AI Upscaling Mode:**
-- 2x or 4x upscaling using Real-ESRGAN
-- Local processing - no API calls or rate limits
-- Enhances image quality and adds detail
-- GPU acceleration support (CUDA)
-- Completely free and open source
-- Works offline
+- 2x, 3x, or 4x upscaling using Cloudinary's Generative AI
+- Cloud-based processing - no local GPU needed
+- Automatic face detection and enhancement
+- Super-resolution quality enhancement
+- Works on any device with internet connection
+- No installation of heavy ML libraries required
 
 ### Universal Format Support
 Convert from an extensive range of image formats including:
@@ -37,14 +37,15 @@ The app automatically analyzes each image and converts it to the most appropriat
 - **PNG** for images with transparency (alpha channels)
 - **JPG** for opaque images (smaller file sizes)
 
-### Real-ESRGAN Integration
-Uses the state-of-the-art Real-ESRGAN model for AI upscaling:
-- No API keys required
-- No rate limits or usage costs
-- Local processing for privacy
-- GPU acceleration when available
-- CPU fallback mode included
-- Multiple scale factors (2x, 4x)
+### Cloudinary AI Integration
+Uses Cloudinary's advanced AI upscaling technology:
+- No API rate limits (based on your Cloudinary plan)
+- Cloud-based processing works on any device
+- Automatic face detection and enhancement
+- Super-resolution quality
+- No local GPU required
+- Multiple scale factors (2x, 3x, 4x)
+- Free tier available for personal use
 
 ### Comprehensive File Information
 View detailed information about each conversion:
@@ -85,12 +86,44 @@ app_password = "password"
 .streamlit/secrets.toml
 ```
 
+### Cloudinary Credentials Setup
+
+For AI upscaling functionality, you need a Cloudinary account:
+
+1. Sign up at [Cloudinary.com](https://cloudinary.com/) (free tier available)
+2. Get your credentials from the dashboard:
+   - Cloud Name
+   - API Key
+   - API Secret
+
+3. Add to `.streamlit/secrets.toml`:
+```toml
+app_password = "password"
+cloudinary_cloud_name = "your-cloud-name"
+cloudinary_api_key = "your-api-key"
+cloudinary_api_secret = "your-api-secret"
+```
+
+4. For Streamlit Cloud, add to app secrets:
+```toml
+app_password = "password"
+cloudinary_cloud_name = "your-cloud-name"
+cloudinary_api_key = "your-api-key"
+cloudinary_api_secret = "your-api-secret"
+```
+
+**Cloudinary Free Tier:**
+- 25 monthly credits (transformations)
+- 25GB storage
+- 25GB monthly bandwidth
+- Perfect for personal use and testing
+
 ## Installation
 
 ### Prerequisites
 - Python 3.8 or higher
 - pip (Python package installer)
-- (Optional) CUDA-compatible GPU for faster AI upscaling
+- Cloudinary account (for AI upscaling)
 
 ### Local Installation
 
@@ -103,83 +136,38 @@ cd image-processor
 2. Create a `.streamlit` directory and `secrets.toml` file:
 ```bash
 mkdir .streamlit
-echo 'app_password = "password"' > .streamlit/secrets.toml
 ```
 
-3. Add secrets to `.gitignore`:
+3. Create `.streamlit/secrets.toml` with your credentials:
+```toml
+app_password = "password"
+cloudinary_cloud_name = "your-cloud-name"
+cloudinary_api_key = "your-api-key"
+cloudinary_api_secret = "your-api-secret"
+```
+
+4. Add secrets to `.gitignore`:
 ```bash
 echo '.streamlit/secrets.toml' >> .gitignore
 ```
 
-4. Install required dependencies:
+5. Install required dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-5. Install Real-ESRGAN for AI upscaling (optional but recommended):
-
-**For GPU users (NVIDIA with CUDA):**
-```bash
-# Install PyTorch with CUDA support first
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-
-# Install Real-ESRGAN and dependencies
-pip install basicsr
-pip install facexlib
-pip install gfpgan
-pip install realesrgan
-```
-
-**For CPU-only users:**
-```bash
-# Install PyTorch (CPU version)
-pip install torch torchvision
-
-# Install Real-ESRGAN and dependencies
-pip install basicsr
-pip install facexlib
-pip install gfpgan
-pip install realesrgan
-```
-
-**Note**: CPU processing is significantly slower than GPU. A single 4x upscale might take 30-60 seconds on CPU vs 2-5 seconds on GPU.
-
-6. For RAW format support, install additional system libraries:
-
-**On Ubuntu/Debian:**
-```bash
-sudo apt-get install libraw-dev
-pip install rawpy
-```
-
-**On macOS:**
-```bash
-brew install libraw
-pip install rawpy
-```
-
-**On Windows:**
-Download and install LibRaw from the official website, then:
-```bash
-pip install rawpy
-```
-
-7. Run the application:
+6. Run the application:
 ```bash
 streamlit run app.py
 ```
 
-8. Enter the password when prompted (default: "password")
+7. Enter the password when prompted (default: "password")
 
-9. Open your browser and navigate to the local URL displayed in the terminal (typically `http://localhost:8501`)
+8. Open your browser and navigate to the local URL displayed in the terminal (typically `http://localhost:8501`)
 
 ## Deployment
 
 ### Deploy to Streamlit Cloud
-
-**Note**: Streamlit Cloud does not support Real-ESRGAN installation due to dependency conflicts with Python 3.13+. The app will automatically fall back to high-quality Lanczos upscaling, which still works well but doesn't use AI enhancement.
-
-**For AI upscaling, deploy to a platform with GPU support (see below).**
 
 1. Push your code to a GitHub repository with the following structure:
 ```
@@ -191,67 +179,41 @@ your-repo/
 
 **Important**: Do NOT include `.streamlit/secrets.toml` in your repository!
 
-2. Create a `requirements.txt` file with the following (simplified for Streamlit Cloud):
-```
-streamlit>=1.28.0
-pillow>=10.0.0
-numpy>=1.24.0
-opencv-python-headless>=4.8.0
-torch>=2.0.0
-torchvision>=0.15.0
-```
+2. Visit [share.streamlit.io](https://share.streamlit.io)
 
-3. Visit [share.streamlit.io](https://share.streamlit.io)
+3. Sign in with your GitHub account
 
-4. Sign in with your GitHub account
+4. Click "New app"
 
-5. Click "New app"
+5. Select your repository, branch, and main file (`app.py`)
 
-6. Select your repository, branch, and main file (`app.py`)
-
-7. **Important**: Before deploying, add secrets:
+6. **Important**: Before deploying, add secrets:
    - In your app dashboard, go to "Settings" → "Secrets"
    - Add the following:
    ```toml
    app_password = "your-secure-password"
+   cloudinary_cloud_name = "your-cloud-name"
+   cloudinary_api_key = "your-api-key"
+   cloudinary_api_secret = "your-api-secret"
    ```
 
-8. Click "Deploy"
+7. Click "Deploy"
 
 Your app will be live at `https://your-app-name.streamlit.app` within minutes!
 
-**On Streamlit Cloud**: The app will use high-quality Lanczos resampling for upscaling instead of Real-ESRGAN. This is still effective for basic upscaling needs.
+**On Streamlit Cloud:**
+- ✅ Format conversion works perfectly
+- ✅ AI upscaling works via Cloudinary (cloud-based)
+- ✅ No GPU required
+- ✅ Fast processing
 
-### Deploy with GPU Support
+### Deploy to Other Platforms
 
-For optimal AI upscaling performance, deploy to a platform with GPU support:
-
-**Google Cloud Run with GPU:**
-1. Create a Docker container with CUDA support
-2. Include PyTorch with CUDA
-3. Deploy to Cloud Run with GPU-enabled instances
-4. Set appropriate memory and CPU limits
-
-**AWS EC2 with GPU:**
-1. Launch a GPU instance (e.g., g4dn.xlarge)
-2. Install CUDA and cuDNN
-3. Follow local installation steps
-4. Use systemd or supervisor to run Streamlit as a service
-5. Set up nginx as a reverse proxy
-
-**Vast.ai / RunPod:**
-1. Rent a GPU instance
-2. Use a pre-configured PyTorch container
-3. Install Streamlit and dependencies
-4. Run the app with port forwarding
-
-### System Requirements for GPU
-
-- **NVIDIA GPU**: GTX 1060 or better (6GB+ VRAM recommended)
-- **CUDA**: Version 11.7 or 11.8
-- **Driver**: Latest NVIDIA drivers
-- **RAM**: 8GB+ system RAM
-- **Storage**: 2GB+ for models
+The app can also be deployed to:
+- **Heroku**: Add environment variables for secrets
+- **Google Cloud Run**: Use Secret Manager for credentials
+- **AWS Elastic Beanstalk**: Configure environment variables
+- **Any platform with Python support**: Set environment variables or use secrets management
 
 ## Usage
 
@@ -263,22 +225,25 @@ For optimal AI upscaling performance, deploy to a platform with GPU support:
 
 3. **Choose Operation**:
    - **Convert & Resize**: Optimize format and resize to 1000px max
-   - **AI Upscale**: Enhance quality using Real-ESRGAN (2x or 4x)
+   - **AI Upscale (Cloudinary)**: Enhance quality using AI (2x, 3x, or 4x)
 
 4. **Select Upscale Factor** (if using AI Upscale):
-   - 2x: Doubles the resolution
-   - 4x: Quadruples the resolution (larger files)
+   - 2x: Doubles the resolution (recommended for most uses)
+   - 3x: Triples the resolution
+   - 4x: Quadruples the resolution (best quality, larger files)
 
 5. **Process**: Click "🚀 Process Images" to start
 
 6. **Automatic Processing**: The app will:
    - Show real-time progress
-   - Process each image according to your selected operation
+   - Upload to Cloudinary (if upscaling)
+   - Apply AI transformations
+   - Download processed images
    - Display detailed results for each file
 
 7. **Review Results**: See a detailed breakdown showing:
    - Filename
-   - Original format → Output format (or upscale factor)
+   - Processing method (conversion or upscale type)
    - Final dimensions in pixels
    - File size in kilobytes
 
@@ -288,17 +253,17 @@ For optimal AI upscaling performance, deploy to a platform with GPU support:
 
 ### Example Use Cases
 
-**Photography Workflow**: Convert RAW camera files to web-friendly JPG format, then upscale select images 4x for print or large displays.
+**Photography Workflow**: Convert RAW camera files to web-friendly JPG format, then upscale select images for print or large displays.
 
 **Web Optimization**: Batch convert and resize images to optimal web formats, reducing page load times while maintaining quality.
 
-**Image Enhancement**: Upscale low-resolution photos 2x or 4x for better quality in presentations, prints, or high-DPI displays.
+**Image Enhancement**: Upscale low-resolution photos for better quality in presentations, prints, or high-DPI displays.
 
-**Old Photo Restoration**: Convert scanned photos from legacy formats, then upscale 4x to recover detail and improve clarity.
+**Old Photo Restoration**: Convert scanned photos from legacy formats, then upscale with AI to recover detail and improve clarity.
 
 **Professional Design**: Convert Photoshop PSD files to web formats, with AI upscaling for final high-res outputs.
 
-**Game Asset Creation**: Upscale low-res textures or sprites for HD remasters.
+**E-commerce**: Upscale product images for better detail and quality, with automatic face enhancement for portraits.
 
 **Social Media**: Resize images to optimal dimensions, then upscale for platforms requiring higher resolutions.
 
@@ -317,49 +282,55 @@ For optimal AI upscaling performance, deploy to a platform with GPU support:
 
 ### AI Upscaling Pipeline
 
-1. **Image Loading**: Opens and validates the input image
-2. **Color Conversion**: Converts to RGB if necessary
-3. **Array Conversion**: Converts PIL image to NumPy array
-4. **AI Enhancement**: Real-ESRGAN model processes the image
-5. **Reconstruction**: Converts enhanced array back to PIL Image
-6. **Output**: Saves as optimized PNG
-7. **Packaging**: Prepares upscaled images for download
+1. **Image Upload**: Securely uploads image to Cloudinary
+2. **AI Processing**: Cloudinary applies generative AI upscaling:
+   - Face detection and enhancement (if faces present)
+   - Super-resolution algorithms
+   - Detail preservation and enhancement
+3. **URL Generation**: Creates optimized delivery URL with transformations
+4. **Download**: Retrieves the upscaled image
+5. **Cleanup**: Automatically removes temporary files from Cloudinary
+6. **Packaging**: Prepares upscaled images for download
 
-### Real-ESRGAN Technology
+### Cloudinary's AI Technology
 
-Real-ESRGAN is a state-of-the-art image super-resolution model that uses Generative Adversarial Networks (GANs) to enhance image quality:
+Cloudinary's upscaling uses advanced generative AI:
 
 **Key Features:**
-- Trained on real-world degraded images
-- Handles complex degradation patterns
-- Preserves fine details and textures
-- Reduces artifacts and noise
-- Works on various image types (photos, art, screenshots)
+- **Face Detection**: Automatically detects and enhances faces with specialized algorithms
+- **Super-Resolution**: Uses AI trained on millions of images to intelligently add detail
+- **Generative AI**: Creates realistic details rather than simple interpolation
+- **Content-Aware**: Understands image content to preserve important features
+- **Quality Optimization**: Automatically selects best format and compression
 
-**Model Architecture:**
-- Based on RRDB (Residual in Residual Dense Block)
-- 23 residual blocks
-- 64 feature channels
-- Trained with perceptual and adversarial losses
+**How It Works:**
+- Analyzes image content and structure
+- Applies specialized algorithms for different image types
+- Uses machine learning models trained on diverse datasets
+- Generates new pixels based on learned patterns
+- Preserves edges, textures, and fine details
 
 **Performance:**
-- GPU (CUDA): 2-5 seconds per image (4x upscale, 1080p input)
-- CPU: 30-60 seconds per image (4x upscale, 1080p input)
-- Memory: ~2GB VRAM for 4K images
+- Cloud-based: No local resources required
+- Fast processing: Typically 2-10 seconds per image
+- Scalable: Handles images up to 100 megapixels
+- Reliable: 99.9% uptime SLA
 
-**Limitations:**
-- Cannot fix heavily blurred or out-of-focus images
-- Best results with sharp, detailed input images
-- Very large images (>4K) may require tiling
-- Requires good quality input for optimal results
+**Face Enhancement:**
+When faces are detected, Cloudinary applies additional generative AI specifically trained on faces to ensure:
+- Natural appearance
+- Clear facial features
+- Proper skin texture
+- No artificial smoothing
+- Enhanced clarity
 
 ### Quality Settings
 
 - **JPEG Quality**: 95% (excellent quality with reasonable compression)
 - **PNG Optimization**: Enabled (reduces file size without quality loss)
 - **Resampling Method**: Lanczos (highest quality resizing algorithm)
-- **AI Model**: RealESRGAN_x4plus (trained on diverse dataset)
-- **Precision**: FP16 (half precision) on GPU, FP32 on CPU
+- **Cloudinary Quality**: auto:best (automatic optimal quality selection)
+- **AI Model**: Cloudinary Generative Upscale with face detection
 
 ## Dependencies
 
@@ -367,29 +338,11 @@ Real-ESRGAN is a state-of-the-art image super-resolution model that uses Generat
 ```
 streamlit>=1.28.0 - Web application framework
 pillow>=10.0.0 - Image processing library
-numpy>=1.24.0 - Numerical computing
-opencv-python-headless>=4.8.0 - Computer vision library
+cloudinary>=1.36.0 - Cloudinary Python SDK
+requests>=2.31.0 - HTTP library for downloads
 ```
 
-### AI Upscaling Dependencies (Optional - for local use with GPU)
-```
-torch>=2.0.0 - Deep learning framework
-torchvision>=0.15.0 - Computer vision utilities
-basicsr>=1.4.2 - Basic image restoration toolkit
-facexlib>=0.3.0 - Face detection and enhancement
-gfpgan>=1.3.8 - Face restoration model
-realesrgan>=0.3.0 - Real-ESRGAN implementation
-```
-
-**Note**: Real-ESRGAN dependencies may not install on Streamlit Cloud due to Python 3.13 compatibility issues. The app includes a fallback to high-quality Lanczos upscaling.
-
-### Optional Dependencies
-```
-rawpy - RAW camera format support
-pydicom - DICOM medical imaging support
-astropy - FITS astronomy format support
-OpenEXR - HDR/EXR format support
-```
+**Note**: No heavy ML libraries required! All AI processing is done in the cloud via Cloudinary's API.
 
 Full version specifications are available in `requirements.txt`.
 
@@ -397,31 +350,17 @@ Full version specifications are available in `requirements.txt`.
 
 ### Common Issues
 
-**Issue**: "AI Upscaling unavailable" message
-**Solution**: Install Real-ESRGAN dependencies:
-```bash
-pip install torch torchvision basicsr facexlib gfpgan realesrgan
-```
+**Issue**: "Cloudinary not configured" message
+**Solution**: Add your Cloudinary credentials to Streamlit secrets as shown in the setup section. Get free credentials at https://cloudinary.com/
 
-**Issue**: CUDA out of memory errors during upscaling
-**Solution**: 
-- Try upscaling smaller images
-- Use 2x instead of 4x upscaling
-- Close other GPU-intensive applications
-- Enable tiling in the code (for very large images)
+**Issue**: Upscaling fails with authentication error
+**Solution**: Verify your Cloudinary credentials are correct. Check your API key and secret in the Cloudinary dashboard.
 
-**Issue**: Very slow upscaling performance
-**Solution**: 
-- Verify GPU is being used (check app status message)
-- Install CUDA-enabled PyTorch version
-- Check NVIDIA drivers are up to date
-- Consider using 2x upscaling instead of 4x
+**Issue**: Images not appearing after upscaling
+**Solution**: Check your Cloudinary plan limits. Free tier has 25 monthly credits. Upgrade if needed or wait for monthly reset.
 
-**Issue**: "ImportError: No module named 'basicsr'"
-**Solution**: Install BasicSR and related packages:
-```bash
-pip install basicsr facexlib gfpgan
-```
+**Issue**: Slow upscaling
+**Solution**: This is normal for cloud processing. Large images or 4x upscaling takes longer. Typically 2-10 seconds per image depending on size.
 
 **Issue**: Password protection not working after deployment
 **Solution**: Ensure you've added `app_password` to your Streamlit Cloud secrets (not just local secrets.toml).
@@ -429,67 +368,87 @@ pip install basicsr facexlib gfpgan
 **Issue**: "Module not found" error when running
 **Solution**: Ensure all dependencies are installed with `pip install -r requirements.txt`
 
-**Issue**: Model download fails
-**Solution**: Check internet connection. Models are downloaded automatically on first use (~65MB for RealESRGAN_x4plus).
+**Issue**: Cloudinary quota exceeded
+**Solution**: You've reached your monthly transformation limit. Either:
+- Wait for monthly reset
+- Upgrade your Cloudinary plan
+- Use basic Lanczos upscaling (app will fall back automatically)
 
-**Issue**: Images look worse after upscaling
-**Solution**: AI upscaling works best on sharp, detailed images. Blurry or out-of-focus images won't improve significantly. Consider using the original or trying 2x instead of 4x.
+### Cloudinary-Specific Issues
 
-### GPU-Specific Issues
+**Issue**: Upload fails with "Invalid signature"
+**Solution**: Check that your API secret is correct and there are no extra spaces in your secrets.toml.
 
-**Issue**: "RuntimeError: CUDA error: out of memory"
-**Solution**: 
-```python
-# Reduce batch size or use tiling (modify code)
-upsampler = RealESRGANer(
-    scale=4,
-    model_path='...',
-    model=model,
-    tile=400,  # Enable tiling for large images
-    tile_pad=10,
-    pre_pad=0
-)
-```
+**Issue**: Upscaled images look different from originals
+**Solution**: This is expected - AI upscaling enhances details and may improve colors/contrast. Use lower scale factors (2x instead of 4x) for more subtle changes.
 
-**Issue**: GPU not detected (shows CPU mode)
-**Solution**:
-1. Check CUDA installation: `nvidia-smi`
-2. Verify PyTorch CUDA: `python -c "import torch; print(torch.cuda.is_available())"`
-3. Reinstall PyTorch with CUDA: `pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118`
+**Issue**: Large images timing out
+**Solution**: Very large images (>20MB) may take longer. Consider:
+- Using 2x instead of 4x upscaling
+- Processing fewer images at once
+- Resizing images before upscaling
 
 ### Performance Tips
 
 - For format conversion, batch process 20-50 images at a time
-- For AI upscaling (GPU), process 5-10 images at a time
-- For AI upscaling (CPU), process 1-3 images at a time
-- Very large source files (>10MB) may take longer to upload and process
-- The app runs in-memory, so available RAM may limit batch sizes
-- For best upscaling results, start with images that are at least 200x200px
+- For AI upscaling, process 5-10 images at a time for optimal performance
 - Use 2x upscaling for faster processing and smaller output files
-- 4x upscaling produces larger files but maximum detail
+- 4x upscaling produces best quality but larger files and longer processing time
+- Monitor your Cloudinary usage in their dashboard
+- Free tier is suitable for 20-25 images per month (depending on settings)
 
-## Comparison: Real-ESRGAN vs API Services
+## Cloudinary Pricing & Limits
 
-**Real-ESRGAN (This App):**
-- ✅ Completely free, no rate limits
-- ✅ Local processing, full privacy
-- ✅ Works offline
-- ✅ Open source
-- ✅ GPU acceleration
-- ✅ High quality results
-- ❌ Requires setup/installation
-- ❌ Needs GPU for good performance
-- ❌ Takes up local resources
+**Free Tier:**
+- 25 monthly transformation credits
+- 25GB storage
+- 25GB monthly bandwidth
+- Perfect for personal use
+- No credit card required
 
-**API Services (DeepAI, etc.):**
-- ✅ No installation required
-- ✅ Works on any device
-- ✅ Fast without GPU
+**Paid Plans:**
+- Start at $89/month
+- More transformations and bandwidth
+- Advanced features
+- Priority support
+- Custom configurations
+
+**Transformation Costs:**
+- Basic transformations: 1 credit each
+- Generative AI (including upscale): Higher credit cost
+- Monitor usage in Cloudinary dashboard
+- Set usage alerts to avoid overages
+
+**Best Practices:**
+- Use 2x upscaling to conserve credits
+- Process only images that truly need upscaling
+- Convert images first, then upscale selectively
+- Monitor your monthly usage
+
+## Comparison: Cloudinary vs Other Solutions
+
+**Cloudinary (This App):**
+- ✅ Cloud-based, works anywhere
+- ✅ No GPU required
+- ✅ State-of-the-art generative AI
+- ✅ Automatic face enhancement
+- ✅ Fast processing (2-10 seconds)
+- ✅ Works on Streamlit Cloud
+- ✅ Free tier available
+- ✅ Easy setup
 - ❌ Requires API key
-- ❌ Rate limits
-- ❌ Costs money (usually)
-- ❌ Requires internet
-- ❌ Privacy concerns
+- ❌ Monthly limits on free tier
+- ❌ Requires internet connection
+
+**Local ML Solutions (Real-ESRGAN, etc.):**
+- ✅ Unlimited processing
+- ✅ Works offline
+- ✅ Free forever
+- ❌ Requires GPU for good performance
+- ❌ Complex installation
+- ❌ Large model downloads
+- ❌ Won't work on Streamlit Cloud
+- ❌ Slow on CPU (30-60s per image)
 
 ## Contributing
 
@@ -497,9 +456,8 @@ Contributions are welcome! Here are some ways you can help:
 
 - Report bugs or request features by opening an issue
 - Submit pull requests with improvements or bug fixes
-- Add support for additional upscaling models
+- Add support for additional image processors
 - Improve error handling and user feedback
-- Optimize performance for CPU/GPU
 - Enhance documentation or add examples
 - Share the app with others who might find it useful
 
@@ -509,7 +467,7 @@ Contributions are welcome! Here are some ways you can help:
 2. Create a feature branch: `git checkout -b feature-name`
 3. Make your changes and test thoroughly with various formats
 4. Test both processing modes (convert and upscale)
-5. Test on both CPU and GPU if possible
+5. Test with and without Cloudinary credentials
 6. Commit with clear messages: `git commit -m "Add feature description"`
 7. Push to your fork: `git push origin feature-name`
 8. Open a pull request
@@ -519,19 +477,19 @@ Contributions are welcome! Here are some ways you can help:
 When contributing, please test:
 - Password protection (correct/incorrect passwords)
 - Both processing modes (convert and upscale)
-- Different upscale factors (2x, 4x)
+- Different upscale factors (2x, 3x, 4x)
 - Common formats (JPG, PNG, GIF)
 - Images with transparency
 - Large files (>10MB)
 - Batch uploads (10+ files)
-- Error handling (missing dependencies, invalid images)
-- Both GPU and CPU modes (if possible)
+- Error handling (missing credentials, network issues)
+- Fallback to Lanczos when Cloudinary not configured
 
 ## License
 
 This project is open source and available under the MIT License.
 
-Real-ESRGAN is licensed under the BSD 3-Clause License.
+Cloudinary is a commercial service with a free tier. See their website for terms of service.
 
 ## Support
 
@@ -539,34 +497,20 @@ If you encounter any issues or have questions:
 - Open an issue on GitHub with detailed error messages
 - Check existing issues for similar problems
 - Review the troubleshooting section above
-- For GPU/CUDA issues, check PyTorch documentation
-- For model-specific issues, consult Real-ESRGAN repository
+- For Cloudinary-specific issues, consult [Cloudinary documentation](https://cloudinary.com/documentation)
+- Check your Cloudinary usage and limits in their dashboard
 
 ## Acknowledgments
 
 Built with [Streamlit](https://streamlit.io) and [Pillow](https://python-pillow.org), two excellent open-source projects that make Python web development and image processing accessible.
 
-AI upscaling powered by [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) by Xintao Wang and team, providing state-of-the-art image super-resolution technology that's free and open source.
+AI upscaling powered by [Cloudinary](https://cloudinary.com/), providing state-of-the-art generative AI for image enhancement that's accessible, reliable, and easy to integrate.
 
 Special thanks to:
-- The Real-ESRGAN team for their groundbreaking research
-- The BasicSR framework developers
-- PyTorch team for the deep learning framework
+- The Cloudinary team for their powerful media API
+- The Streamlit team for the amazing web framework
 - All contributors to the image processing ecosystem
-
-## Citation
-
-If you use Real-ESRGAN in your research, please cite:
-
-```bibtex
-@InProceedings{wang2021realesrgan,
-    author    = {Xintao Wang and Liangbin Xie and Chao Dong and Ying Shan},
-    title     = {Real-ESRGAN: Training Real-World Blind Super-Resolution with Pure Synthetic Data},
-    booktitle = {International Conference on Computer Vision Workshops (ICCVW)},
-    date      = {2021}
-}
-```
 
 ---
 
-**Made with ❤️ for universal image processing - Convert & Upscale with Local AI Power!**
+**Made with ❤️ for universal image processing - Convert & Upscale with Cloud AI Power!**
