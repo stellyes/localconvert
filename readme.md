@@ -1,4 +1,4 @@
-# 🖼️ AI Image Processor
+# LocalConvert - Custom Image Processor
 
 A powerful, versatile web application built with Streamlit that offers format conversion from 70+ formats and AI-powered image upscaling using Cloudinary's Generative AI. The app intelligently handles transparency, resizing, and uses cloud-based AI processing for high-quality upscaling without local GPU requirements.
 
@@ -514,3 +514,4 @@ Special thanks to:
 ---
 
 **Made with ❤️ for universal image processing - Convert & Upscale with Cloud AI Power!**
+
