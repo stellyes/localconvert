@@ -9,7 +9,7 @@ import cloudinary.api
 import requests
 import base64
 
-st.set_page_config(page_title="Image Processor", page_icon="🖼️")
+st.set_page_config(page_title="LocalConvert", page_icon="🖼️")
 
 # Password protection
 def check_password():
@@ -56,7 +56,7 @@ try:
 except Exception as e:
     CLOUDINARY_CONFIGURED = False
 
-st.title("🖼️ AI Image Processor")
+st.title("LocalConvert")
 st.write("Upload images and choose to convert formats or upscale using AI.")
 
 # Show system info
