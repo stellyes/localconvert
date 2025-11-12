@@ -3,9 +3,13 @@ from PIL import Image
 import io
 import zipfile
 from pathlib import Path
-import sys
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+import requests
+import base64
 
-st.set_page_config(page_title="LocalConvert", page_icon="🖼️")
+st.set_page_config(page_title="Image Processor", page_icon="🖼️")
 
 # Password protection
 def check_password():
@@ -40,33 +44,26 @@ def check_password():
 if not check_password():
     st.stop()  # Don't continue if password check fails
 
-# Check for Real-ESRGAN availability
+# Configure Cloudinary
 try:
-    import torch
-    import numpy as np
-    from basicsr.archs.rrdbnet_arch import RRDBNet
-    from realesrgan import RealESRGANer
-    REALESRGAN_AVAILABLE = True
-    DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-except ImportError:
-    try:
-        import torch
-        import numpy as np
-        TORCH_AVAILABLE = True
-    except ImportError:
-        TORCH_AVAILABLE = False
-    REALESRGAN_AVAILABLE = False
-    DEVICE = 'cpu'
+    cloudinary.config(
+        cloud_name=st.secrets.get("cloudinary_cloud_name", ""),
+        api_key=st.secrets.get("cloudinary_api_key", ""),
+        api_secret=st.secrets.get("cloudinary_api_secret", ""),
+        secure=True
+    )
+    CLOUDINARY_CONFIGURED = bool(st.secrets.get("cloudinary_cloud_name"))
+except Exception as e:
+    CLOUDINARY_CONFIGURED = False
 
 st.title("🖼️ AI Image Processor")
 st.write("Upload images and choose to convert formats or upscale using AI.")
 
 # Show system info
-if REALESRGAN_AVAILABLE:
-    device_emoji = "🚀" if DEVICE == 'cuda' else "🐌"
-    st.info(f"{device_emoji} AI Upscaling: Real-ESRGAN {'GPU acceleration' if DEVICE == 'cuda' else 'CPU mode'}")
+if CLOUDINARY_CONFIGURED:
+    st.info("🚀 AI Upscaling: Cloudinary Generative AI (cloud-based)")
 else:
-    st.warning("⚠️ Real-ESRGAN not available. Using basic Lanczos upscaling instead. For AI upscaling, install locally with: `pip install basicsr realesrgan`")
+    st.warning("⚠️ Cloudinary not configured. Add credentials to Streamlit secrets for AI upscaling. Using basic Lanczos upscaling instead.")
 
 # Comprehensive list of supported formats
 SUPPORTED_FORMATS = [
@@ -110,8 +107,6 @@ SUPPORTED_FORMATS = [
     'dds',
     # FLIF
     'flif',
-    # WebP animated
-    'webp',
     # MNG
     'mng',
     # Additional
@@ -124,32 +119,6 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True,
     help="Supports 70+ image formats including RAW, PSD, EPS, HEIC, and more!"
 )
-
-# Initialize Real-ESRGAN model (cached)
-@st.cache_resource
-def load_realesrgan_model(scale=4):
-    """Load Real-ESRGAN model (cached)"""
-    if not REALESRGAN_AVAILABLE:
-        return None
-    
-    try:
-        # Use RealESRGAN_x4plus model
-        model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=scale)
-        
-        upsampler = RealESRGANer(
-            scale=scale,
-            model_path='https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth',
-            model=model,
-            tile=0,
-            tile_pad=10,
-            pre_pad=0,
-            half=True if DEVICE == 'cuda' else False,
-            device=DEVICE
-        )
-        return upsampler
-    except Exception as e:
-        st.error(f"Error loading model: {e}")
-        return None
 
 def has_transparency(img):
     """Check if image has transparency"""
@@ -261,8 +230,71 @@ def convert_image(uploaded_file):
     except Exception as e:
         return {'error': str(e), 'filename': uploaded_file.name}
 
+def upscale_image_cloudinary(uploaded_file, scale=2):
+    """Upscale image using Cloudinary's AI upscaling"""
+    try:
+        # Read file bytes
+        uploaded_file.seek(0)
+        file_bytes = uploaded_file.read()
+        uploaded_file.seek(0)
+        
+        # Upload to Cloudinary
+        upload_result = cloudinary.uploader.upload(
+            file_bytes,
+            folder="streamlit_upscale",
+            resource_type="image"
+        )
+        
+        public_id = upload_result['public_id']
+        
+        # Get original dimensions
+        original_width = upload_result['width']
+        original_height = upload_result['height']
+        
+        # Calculate target dimensions
+        target_width = original_width * scale
+        target_height = original_height * scale
+        
+        # Generate upscaled URL with Cloudinary transformations
+        upscaled_url = cloudinary.CloudinaryImage(public_id).build_url(
+            effect="upscale",
+            width=target_width,
+            height=target_height,
+            crop="scale",
+            quality="auto:best"
+        )
+        
+        # Download the upscaled image
+        response = requests.get(upscaled_url, timeout=60)
+        
+        if response.status_code != 200:
+            raise Exception(f"Failed to download upscaled image: {response.status_code}")
+        
+        # Open the upscaled image to get info
+        img = Image.open(io.BytesIO(response.content))
+        
+        # Clean up - delete from Cloudinary
+        try:
+            cloudinary.uploader.destroy(public_id)
+        except:
+            pass  # Ignore cleanup errors
+        
+        # Generate filename
+        original_name = Path(uploaded_file.name).stem
+        new_filename = f"{original_name}_upscaled_{scale}x.png"
+        
+        return {
+            'data': response.content,
+            'filename': new_filename,
+            'format': 'PNG',
+            'size': img.size,
+            'original_format': 'cloudinary_upscaled'
+        }
+    except Exception as e:
+        return {'error': str(e), 'filename': uploaded_file.name}
+
 def upscale_image_basic(uploaded_file, scale=2):
-    """Basic upscaling using Lanczos resampling (fallback when Real-ESRGAN unavailable)"""
+    """Basic upscaling using Lanczos resampling (fallback)"""
     try:
         # Open image
         img = Image.open(uploaded_file)
@@ -297,44 +329,6 @@ def upscale_image_basic(uploaded_file, scale=2):
     except Exception as e:
         return {'error': str(e), 'filename': uploaded_file.name}
 
-def upscale_image_realesrgan(uploaded_file, upsampler, scale=4):
-    """Upscale image using Real-ESRGAN"""
-    try:
-        # Open image
-        img = Image.open(uploaded_file)
-        
-        # Convert to RGB if necessary
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        
-        # Convert to numpy array
-        img_np = np.array(img)
-        
-        # Upscale using Real-ESRGAN
-        output_np, _ = upsampler.enhance(img_np, outscale=scale)
-        
-        # Convert back to PIL Image
-        output_img = Image.fromarray(output_np)
-        
-        # Save to bytes
-        output = io.BytesIO()
-        output_img.save(output, format='PNG', optimize=True)
-        output.seek(0)
-        
-        # Generate filename
-        original_name = Path(uploaded_file.name).stem
-        new_filename = f"{original_name}_upscaled_{scale}x.png"
-        
-        return {
-            'data': output.getvalue(),
-            'filename': new_filename,
-            'format': 'PNG',
-            'size': output_img.size,
-            'original_format': 'upscaled'
-        }
-    except Exception as e:
-        return {'error': str(e), 'filename': uploaded_file.name}
-
 if uploaded_files:
     st.write(f"### {len(uploaded_files)} file(s) uploaded")
     
@@ -343,34 +337,26 @@ if uploaded_files:
     
     col1, col2 = st.columns(2)
     with col1:
-        upscale_label = "AI Upscale (Real-ESRGAN)" if REALESRGAN_AVAILABLE else "Upscale (Lanczos)"
+        upscale_label = "AI Upscale (Cloudinary)" if CLOUDINARY_CONFIGURED else "Upscale (Lanczos)"
         operation = st.radio(
             "What would you like to do?",
             ["Convert & Resize", upscale_label],
-            help="Convert: Optimize format and resize to 1000px max | Upscale: Enhance image size"
+            help="Convert: Optimize format and resize to 1000px max | Upscale: Enhance image size with AI"
         )
     
     if "Upscale" in operation:
         with col2:
             scale = st.selectbox(
                 "Upscale factor",
-                [2, 4],
-                index=1 if REALESRGAN_AVAILABLE else 0,
-                help="Higher values = larger output files"
+                [2, 3, 4],
+                index=0,
+                help="Higher values = larger output files. Cloudinary AI works best at 2-4x."
             )
     
     # Process button
     if st.button("🚀 Process Images", type="primary", use_container_width=True):
         processed_images = []
         errors = []
-        
-        # Load model if upscaling
-        upsampler = None
-        if "Upscale" in operation and REALESRGAN_AVAILABLE:
-            with st.spinner("Loading AI model..."):
-                upsampler = load_realesrgan_model(scale=scale)
-                if upsampler is None:
-                    st.error("Failed to load Real-ESRGAN model. Falling back to basic upscaling.")
         
         # Process all images
         progress_bar = st.progress(0)
@@ -382,8 +368,8 @@ if uploaded_files:
             if operation == "Convert & Resize":
                 result = convert_image(uploaded_file)
             else:  # Upscale
-                if REALESRGAN_AVAILABLE and upsampler:
-                    result = upscale_image_realesrgan(uploaded_file, upsampler, scale)
+                if CLOUDINARY_CONFIGURED:
+                    result = upscale_image_cloudinary(uploaded_file, scale)
                 else:
                     result = upscale_image_basic(uploaded_file, scale)
             
@@ -416,7 +402,7 @@ if uploaded_files:
                     if operation == "Convert & Resize":
                         st.write(f"{img_data['original_format']} → {img_data['format']}")
                     else:
-                        method = "Real-ESRGAN" if img_data['original_format'] == 'upscaled' else "Lanczos"
+                        method = "Cloudinary AI" if img_data['original_format'] == 'cloudinary_upscaled' else "Lanczos"
                         st.write(f"{method} {scale}x")
                 with col3:
                     st.write(f"{img_data['size'][0]}×{img_data['size'][1]}px")
@@ -476,7 +462,7 @@ else:
 
 # Footer
 st.markdown("---")
-if REALESRGAN_AVAILABLE:
-    st.caption("AI Image Processor - Convert & Upscale | Powered by Real-ESRGAN | Supports 70+ formats")
+if CLOUDINARY_CONFIGURED:
+    st.caption("AI Image Processor - Convert & Upscale | Powered by Cloudinary AI | Supports 70+ formats")
 else:
     st.caption("Image Processor - Convert & Upscale | Basic Lanczos Upscaling | Supports 70+ formats")
